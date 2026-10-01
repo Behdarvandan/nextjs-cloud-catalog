@@ -1,22 +1,17 @@
 import { Suspense } from "react";
-import { fetchCategories, fetchProducts } from "@/lib/api";
+import { fetchCategories, fetchProducts, parseFilterParams } from "@/lib/api";
+import type { RawSearchParams } from "@/types/product";
 import ProductFilters from "@/components/product/ProductFilters";
 import ProductGrid from "@/components/product/ProductGrid";
 
 interface CatalogPageProps {
-  searchParams: Promise<{
-    search?: string;
-    category?: string;
-    minPrice?: string;
-    maxPrice?: string;
-    sortBy?: string;
-  }>;
+  searchParams: Promise<RawSearchParams>;
 }
 
 export default async function CatalogPage({
   searchParams,
 }: CatalogPageProps) {
-  const filters = await searchParams;
+  const filters = parseFilterParams(await searchParams);
 
   const [products, categories] = await Promise.all([
     fetchProducts(filters),

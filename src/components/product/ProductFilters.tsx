@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal } from "lucide-react";
 
@@ -13,33 +13,35 @@ export default function ProductFilters({ categories }: ProductFiltersProps) {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const currentSearch = searchParams.get("search") ?? "";
+  const [search, setSearch] = useState(currentSearch);
 
   const currentCategory = searchParams.get("category") ?? "all";
   const currentSortBy = searchParams.get("sortBy") ?? "featured";
   const currentMinPrice = searchParams.get("minPrice") ?? "";
   const currentMaxPrice = searchParams.get("maxPrice") ?? "";
 
-  function updateParam(key: string, value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    startTransition(() => {
-      router.push(`/?${params.toString()}`);
-    });
-  }
+  const updateParam = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+      startTransition(() => {
+        router.push(`/?${params.toString()}`);
+      });
+    },
+    [router, searchParams],
+  );
 
   // Debounce the free-text search so we do not issue a request per keystroke.
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      updateParam("search", search);
-    }, 400);
+    if (search === currentSearch) return;
+    const timeout = setTimeout(() => updateParam("search", search), 400);
     return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, currentSearch, updateParam]);
 
   return (
     <div className="w-full space-y-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

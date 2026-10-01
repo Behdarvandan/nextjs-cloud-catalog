@@ -1,4 +1,9 @@
-import type { FilterParams, Product } from "@/types/product";
+import {
+  isSortOption,
+  type FilterParams,
+  type Product,
+  type RawSearchParams,
+} from "@/types/product";
 
 /**
  * In-memory mock database of premium e-commerce products.
@@ -160,6 +165,27 @@ const MOCK_PRODUCTS: Product[] = [
   },
 ];
 
+const MAX_SEARCH_LENGTH = 100;
+
+function firstValue(value: string | string[] | undefined): string | undefined {
+  const v = Array.isArray(value) ? value[0] : value;
+  return v?.trim() ? v.trim() : undefined;
+}
+
+/**
+ * Normalize untrusted query-string input into a strictly typed FilterParams.
+ */
+export function parseFilterParams(raw: RawSearchParams): FilterParams {
+  const sortBy = firstValue(raw.sortBy);
+  return {
+    search: firstValue(raw.search)?.slice(0, MAX_SEARCH_LENGTH),
+    category: firstValue(raw.category),
+    minPrice: firstValue(raw.minPrice),
+    maxPrice: firstValue(raw.maxPrice),
+    sortBy: isSortOption(sortBy) ? sortBy : undefined,
+  };
+}
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -170,8 +196,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function fetchProducts(filters: FilterParams = {}): Promise<Product[]> {
   await delay(300);
 
-  const products = [...MOCK_PRODUCTS];
-  let filtered = products;
+  let filtered = [...MOCK_PRODUCTS];
 
   // 1. Case-insensitive text search across title and description
   if (filters.search) {
@@ -205,26 +230,24 @@ export async function fetchProducts(filters: FilterParams = {}): Promise<Product
   }
 
   // 4. Sorting
-  if (filters.sortBy) {
-    switch (filters.sortBy) {
-      case "price-asc":
-        filtered.sort((a, b) => a.price - b.price);
-        break;
-      case "price-desc":
-        filtered.sort((a, b) => b.price - a.price);
-        break;
-      case "rating-desc":
-        filtered.sort((a, b) => b.rating.rate - a.rating.rate);
-        break;
-      case "featured":
-      default:
-        filtered.sort((a, b) => {
-          if (a.featured && !b.featured) return -1;
-          if (!a.featured && b.featured) return 1;
-          return b.rating.rate - a.rating.rate;
-        });
-        break;
-    }
+  switch (filters.sortBy) {
+    case "price-asc":
+      filtered.sort((a, b) => a.price - b.price);
+      break;
+    case "price-desc":
+      filtered.sort((a, b) => b.price - a.price);
+      break;
+    case "rating-desc":
+      filtered.sort((a, b) => b.rating.rate - a.rating.rate);
+      break;
+    case "featured":
+    default:
+      filtered.sort((a, b) => {
+        if (a.featured && !b.featured) return -1;
+        if (!a.featured && b.featured) return 1;
+        return b.rating.rate - a.rating.rate;
+      });
+      break;
   }
 
   return filtered;

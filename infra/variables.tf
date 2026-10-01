@@ -24,6 +24,7 @@ variable "container_image" {
   description = "ECR image URI for the Next.js application"
   type        = string
   default     = "675134942906.dkr.ecr.eu-central-1.amazonaws.com/nextjs-cloud-catalog:latest"
+  # Pin an immutable tag or digest per release instead of ":latest" in production
 }
 
 variable "fargate_cpu" {
@@ -54,4 +55,15 @@ variable "vpc_cidr_block" {
   description = "CIDR block for the application VPC"
   type        = string
   default     = "10.0.0.0/16"
+}
+
+variable "certificate_arn" {
+  description = "ACM certificate ARN used by the HTTPS listener (required)"
+  type        = string
+}
+
+variable "alb_ingress_cidrs" {
+  description = "CIDR blocks allowed to reach the public load balancer"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }

@@ -5,7 +5,8 @@
 # Centralized log group for container stdout/stderr
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.project_name}"
-  retention_in_days = 7
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.logs.arn
 
   tags = {
     Name = "${var.project_name}-log-group"
@@ -89,6 +90,9 @@ resource "aws_ecs_task_definition" "app" {
       image     = var.container_image
       essential = true
 
+      readonlyRootFilesystem = true
+      privileged             = false
+
       portMappings = [
         {
           containerPort = var.container_port
@@ -98,7 +102,7 @@ resource "aws_ecs_task_definition" "app" {
       ]
 
       healthCheck = {
-        command     = ["CMD-SHELL", "node -e \"fetch('http://localhost:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+        command     = ["CMD-SHELL", "node -e \"fetch('http://localhost:${var.container_port}').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
         interval    = 30
         timeout     = 5
         retries     = 3
@@ -126,26 +130,26 @@ resource "aws_ecs_task_definition" "app" {
   }
 }
 
-# Security group: allow inbound traffic on the application port only
+# Security group: tasks accept traffic from the ALB only; egress limited to HTTPS
 resource "aws_security_group" "ecs_sg" {
   name        = "${var.project_name}-ecs-sg"
   description = "Security group for the Next.js Fargate service"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = var.container_port
-    to_port     = var.container_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow inbound HTTP on the application port"
+    from_port       = var.container_port
+    to_port         = var.container_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "Allow inbound traffic from the load balancer only"
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
+    description = "Allow outbound HTTPS (ECR pulls, CloudWatch Logs)"
   }
 
   tags = {
@@ -153,7 +157,7 @@ resource "aws_security_group" "ecs_sg" {
   }
 }
 
-# Fargate service running in public subnets with a public IP assigned
+# Fargate service running in private subnets behind the load balancer
 resource "aws_ecs_service" "app" {
   name            = "${var.project_name}-service"
   cluster         = aws_ecs_cluster.main.id
@@ -162,10 +166,18 @@ resource "aws_ecs_service" "app" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
-    assign_public_ip = true
+    subnets          = aws_subnet.private[*].id
+    assign_public_ip = false
     security_groups  = [aws_security_group.ecs_sg.id]
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = var.project_name
+    container_port   = var.container_port
+  }
+
+  depends_on = [aws_lb_listener.https]
 
   deployment_circuit_breaker {
     enable   = true
