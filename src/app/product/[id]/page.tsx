@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Check, ShoppingCart, Star } from "lucide-react";
 import { fetchProductById } from "@/lib/api";
@@ -9,6 +10,15 @@ import Card from "@/components/ui/Card";
 
 interface ProductDetailPageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: ProductDetailPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const product = await fetchProductById(id);
+  if (!product) return { title: "Product not found" };
+  return { title: `${product.title} — CloudCatalog`, description: product.description };
 }
 
 export default async function ProductDetailPage({
